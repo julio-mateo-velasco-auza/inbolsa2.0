@@ -1,0 +1,186 @@
+---
+export const prerender = false;
+
+import AppLayout from '../layouts/AppLayout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+
+const PAGE_TITLE = 'Productos (acceso vía QR)';
+
+// SSR: exige cookie “qrauth” o “priv_mode” para permitir entrar
+const cookie = Astro.request.headers.get('cookie') || '';
+const isPrivate = /\bqrauth=/.test(cookie) || /\bpriv_mode=1\b/.test(cookie);
+if (!isPrivate) {
+  // si ya no hay rastro de acceso privado, vuelve a la home
+  return Astro.redirect('/');
+}
+
+/** Catálogo (ids estables) */
+const PRODUCTS = [
+  { id: 'bolsa-chica',   name: 'Bolsa chica',   cat: 'Bolsas', price: 'S/ 10', img: '/img/bolsa-chica.jpg',   desc: 'Bolsa tamaño pequeño.' },
+  { id: 'bolsa-grande',  name: 'Bolsa grande',  cat: 'Bolsas', price: 'S/ 18', img: '/img/bolsa-grande.jpg',  desc: 'Bolsa tamaño grande.' },
+  { id: 'bolsa-enorme',  name: 'Bolsa enorme',  cat: 'Bolsas', price: 'S/ 26', img: '/img/bolsa-enorme.jpg',  desc: 'Bolsa de gran capacidad.' },
+  { id: 'hilo-algodon',  name: 'Hilo de algodón', cat: 'Hilos', price: 'S/ 8', img: '/img/hilo-algodon.jpg',  desc: 'Hilo 100% algodón.' },
+  { id: 'hilo-nylon',    name: 'Hilo de nylon',   cat: 'Hilos', price: 'S/ 7', img: '/img/hilo-nylon.jpg',    desc: 'Hilo resistente de nylon.' },
+];
+---
+
+<AppLayout title={PAGE_TITLE}>
+  <!-- Header SOLO para productos -->
+  <Header transparent={false} isPrivate={true} />
+
+  <section class="mx-auto max-w-6xl px-4 py-10">
+    <header class="mb-8">
+    </header>
+
+    <div id="msg" class="mb-6 text-sm text-slate-700"></div>
+
+    <section id="grid" class="grid grid-cols-1 gap-10 opacity-0 transition">
+      {PRODUCTS.map((p, i) => (
+        <article
+          data-product-id={p.id}
+          style="display:none"
+          class="rounded-3xl border bg-white shadow-sm overflow-hidden"
+        >
+          <div class={`md:flex md:items-stretch md:gap-8 ${i % 2 ? 'md:flex-row-reverse' : ''}`}>
+            <div class="md:w-1/2">
+              <div class="aspect-[16/10] bg-slate-100">
+                <img src={p.img} alt={p.name} class="h-full w-full object-cover" loading="lazy" />
+              </div>
+            </div>
+
+            <div class="md:w-1/2 p-6 md:p-8">
+              <div class="flex items-center gap-3">
+                <span class="text-xs rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-600">{p.cat}</span>
+                <span class="text-xs text-slate-400">id: {p.id}</span>
+              </div>
+              <h3 class="mt-3 text-2xl font-bold tracking-tight">{p.name}</h3>
+              <p class="mt-2 text-slate-600">{p.desc}</p>
+
+              <div class="mt-5 flex flex-wrap items-center gap-3">
+                <div class="text-xl font-semibold">{p.price}</div>
+                <div class="h-5 w-px bg-slate-200"></div>
+                <span class="text-sm text-slate-500">Disponibilidad sujeta a verificación</span>
+              </div>
+
+              <div class="mt-6 flex flex-wrap gap-3">
+                <a href="#" class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Más información</a>
+                <a
+                  href={`https://wa.me/?text=${encodeURIComponent('Quiero información sobre: ' + p.name)}`}
+                  target="_blank" rel="noopener"
+                  class="rounded-xl border px-4 py-2 text-sm hover:bg-slate-50"
+                >
+                  Consultar por WhatsApp
+                </a>
+              </div>
+            </div>
+          </div>
+        </article>
+      ))}
+    </section>
+
+    <noscript>
+      <div class="mt-6 rounded-xl border bg-white p-4">
+        Necesitas JavaScript para visualizar esta sección protegida.
+      </div>
+    </noscript>
+  </section>
+
+  <!-- Footer SOLO para productos -->
+  <Footer />
+
+  <script type="module">
+    (async () => {
+      const tokenKey = 'inbolsa_access_token';
+      const msg = document.getElementById('msg');
+      const grid = document.getElementById('grid');
+      const navProductos = document.querySelector('a[href="/productos"]');
+
+      function show(text, cls='text-slate-700') {
+        if (!msg) return;
+        msg.className = 'mb-6 text-sm ' + cls;
+        msg.innerHTML = text;
+      }
+      function hideProductosLink(){
+        if (navProductos) navProductos.style.display = 'none';
+        document.cookie = 'qrauth=; Max-Age=0; path=/; samesite=Lax';
+        document.cookie = 'priv_mode=; Max-Age=0; path=/; samesite=Lax';
+      }
+
+      // Captura ?token= o #token= en caso de acceso directo
+      try {
+        const url = new URL(location.href);
+        let t = url.searchParams.get('token');
+        if (!t && location.hash && location.hash.startsWith('#token=')) {
+          t = location.hash.slice(7);
+        }
+        if (t) {
+          localStorage.setItem(tokenKey, t);
+          url.searchParams.delete('token');
+          history.replaceState({}, '', url.toString().split('#')[0]);
+          if (location.hash) location.hash = '';
+        }
+      } catch {}
+
+      const token = localStorage.getItem(tokenKey);
+      if (!token) {
+        // No token → limpiar pistas y volver al inicio
+        hideProductosLink();
+        location.replace('/');
+        return;
+      }
+
+      try {
+        const url = '/api/access/payload?accessToken=' + encodeURIComponent(token);
+        const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token }, credentials: 'include' });
+        const json = await res.json();
+
+        if (!res.ok || !json || !json.ok) {
+          // Token inválido/revocado → limpiar y volver a home
+          localStorage.removeItem(tokenKey);
+          hideProductosLink();
+          location.replace('/');
+          return;
+        }
+
+        const data = json.data || {};
+        const cards = Array.from(document.querySelectorAll('[data-product-id]'));
+
+        if (data.allow === 'all') {
+          cards.forEach(function (el) { el.style.display = ''; });
+          show('Acceso concedido. Mostrando todos los productos.', 'text-green-700');
+          if (grid) grid.style.opacity = '1';
+          return;
+        }
+
+        const ids = Array.isArray(data.products) ? data.products : [];
+        const allowed = new Set(ids);
+        var count = 0;
+
+        cards.forEach(function (el) {
+          const id = el.getAttribute('data-product-id');
+          if (id && allowed.has(id)) {
+            el.style.display = '';
+            count++;
+          } else {
+            el.style.display = 'none';
+          }
+        });
+
+        if (count === 0) {
+          show('Acceso válido, pero no hay productos habilitados para este QR.', 'text-amber-700');
+        } else {
+          show('Acceso concedido. Mostrando ' + count + ' producto(s).', 'text-green-700');
+        }
+
+        if (grid) grid.style.opacity = '1';
+      } catch (err) {
+        console.error(err);
+        // Error de red → por seguridad, limpiar y salir
+        localStorage.removeItem(tokenKey);
+        hideProductosLink();
+        location.replace('/');
+      }
+    })();
+  </script>
+</AppLayout>

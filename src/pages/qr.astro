@@ -1,0 +1,88 @@
+---
+const PAGE_TITLE = 'Validación de QR';
+---
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>{PAGE_TITLE}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <style>
+      :root { color-scheme: light dark; font-synthesis-weight: none }
+      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji'; margin:0; background:#0b0b11; color:#e6e6e6 }
+      .wrap { max-width: 920px; margin: 48px auto; padding: 0 16px }
+      .card { background: #11131a; border: 1px solid #222536; border-radius: 16px; padding: 20px }
+      .ok { color: #7ee787 }
+      .bad { color: #ff7b72 }
+      .muted { color:#9aa3b2 }
+      .btn { display:inline-block; padding:10px 14px; border-radius:10px; border:1px solid #2c3244; color:#cbd5e1; text-decoration:none }
+      .btn:hover { background:#1b2030 }
+      code.kbd { background:#0d1019; border:1px solid #293148; padding:4px 6px; border-radius:8px }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <h1 style="font-size:28px;margin:0 0 16px 0;">Validación de QR</h1>
+      <div id="box" class="card">
+        <div id="msg" class="muted">Comprobando…</div>
+        <div id="extra" style="margin-top:10px"></div>
+        <div style="margin-top:16px">
+          <a href="/" class="btn">Volver al inicio</a>
+        </div>
+      </div>
+    </main>
+
+    <script type="module">
+      (async () => {
+        const tokenKey = 'inbolsa_access_token';
+        const msg   = document.getElementById('msg');
+        const extra = document.getElementById('extra');
+
+        const params = new URLSearchParams(location.search);
+        const code = params.get('code') || '';
+
+        function show(text, cls='') {
+          if (!msg) return;
+          msg.className = cls || 'muted';
+          msg.innerHTML = text;
+        }
+
+        if (!code) {
+          show('Falta el parámetro <code class="kbd">code</code>.', 'bad');
+          extra.innerHTML = '';
+          return;
+        }
+
+        try {
+          const res = await fetch('/api/qr/validate?code=' + encodeURIComponent(code), { credentials: 'include' });
+          const data = await res.json();
+
+          if (res.ok && data && data.valid) {
+            try { localStorage.setItem(tokenKey, data.accessToken); } catch {}
+            try {
+              const url = new URL(location.href);
+              url.searchParams.delete('code');
+              history.replaceState({}, '', url);
+            } catch {}
+
+            const ttl = typeof data.ttl === 'number' ? data.ttl : null;
+            show('✅ <span class="ok">QR válido</span>. Acceso concedido.' + (ttl ? ` <span class="muted">(TTL: ${ttl}s)</span>` : ''), 'ok');
+            extra.innerHTML = `<div style="margin-top:6px">code: <code class="kbd">${code}</code></div>
+                               <div style="margin-top:10px"><a class="btn" href="/productos">Ir a productos desbloqueados</a></div>`;
+            setTimeout(() => { location.replace('/productos'); }, 500);
+          } else {
+            const reason = data?.error || 'No autorizado';
+            show('❌ <span class="bad">QR inválido o expirado</span>. ' + reason, 'bad');
+            extra.innerHTML = '<div class="muted">Solicite un nuevo QR.</div>';
+            try { localStorage.removeItem(tokenKey); } catch {}
+          }
+        } catch (e) {
+          console.error(e);
+          show('No se pudo validar el QR. Inténtalo nuevamente.', 'bad');
+          extra.innerHTML = '';
+        }
+      })();
+    </script>
+  </body>
+</html>

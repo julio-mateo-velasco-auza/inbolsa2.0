@@ -1,0 +1,95 @@
+---
+export const prerender = false;
+
+import Base from '../layouts/Base.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import HomeHero from '../components/HomeHero.astro';
+
+// SSR: modo privado si vienen cookies de /api/qr/open
+const cookie = Astro.request.headers.get('cookie') || '';
+const isPrivate = /\bqrauth=/.test(cookie) || /\bpriv_mode=1\b/.test(cookie);
+---
+<Base title="Home — Inbolsa">
+  <Header transparent={true} isPrivate={isPrivate} />
+  <HomeHero isPrivate={isPrivate} />
+
+  <main>
+    <!-- …tu contenido de la home… -->
+  </main>
+
+  <Footer />
+
+  <!-- Aparición de secciones -->
+  <script is:inline>
+    const els = document.querySelectorAll('.reveal');
+    els.forEach(el => {
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(18px)';
+      el.style.transition = 'opacity .6s ease, transform .6s ease';
+    });
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (e.isIntersecting) {
+          e.target.style.opacity = '1';
+          e.target.style.transform = 'translateY(0)';
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.15 });
+    els.forEach(el => io.observe(el));
+  </script>
+
+  <!-- Captura ?token=... al volver de /api/qr/open y lo guarda -->
+  <script is:inline>
+    (function(){
+      try {
+        const url = new URL(window.location.href);
+        const token = url.searchParams.get('token');
+        if (token) {
+          localStorage.setItem('inbolsa_access_token', token);
+          url.searchParams.delete('token');
+          history.replaceState({}, '', url.toString());
+        }
+      } catch {}
+    })();
+  </script>
+
+  <!-- NUEVO: valida token y oculta “Productos” si está revocado/expirado -->
+  <script is:inline>
+    (async function(){
+      const tokenKey = 'inbolsa_access_token';
+      const navProductos = document.querySelector('a[href="/productos"]');
+
+      function hideProductosLink(){
+        if (navProductos) navProductos.style.display = 'none';
+        // limpiar cookies de pista
+        document.cookie = 'qrauth=; Max-Age=0; path=/; samesite=Lax';
+        document.cookie = 'priv_mode=; Max-Age=0; path=/; samesite=Lax';
+      }
+      function showProductosLink(){ if (navProductos) navProductos.style.display = ''; }
+
+      const token = localStorage.getItem(tokenKey);
+      if (!token) { hideProductosLink(); return; }
+
+      try {
+        const r = await fetch('/api/access/payload?accessToken=' + encodeURIComponent(token), {
+          headers: { 'Authorization': 'Bearer ' + token },
+          credentials: 'include'
+        });
+        const j = await r.json().catch(()=> ({}));
+        if (!r.ok || !j || !j.ok) {
+          // token ya no sirve → limpiar todo
+          localStorage.removeItem(tokenKey);
+          hideProductosLink();
+          return;
+        }
+        // token válido → asegúrate de que se muestre
+        showProductosLink();
+      } catch {
+        // en caso de error de red, no mostramos el link para no exponerlo
+        hideProductosLink();
+      }
+    })();
+  </script>
+</Base>

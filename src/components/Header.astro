@@ -1,0 +1,223 @@
+---
+type NavLink = { href: string; label: string };
+
+const { transparent = false, isPrivate = false } = Astro.props as { transparent?: boolean; isPrivate?: boolean };
+const isActive = (href: string) => Astro.url.pathname === href;
+
+// SSR: cookies de pista
+const rawCookie = Astro.request.headers.get('cookie') || '';
+const hasPrivCookie = /\bpriv_mode=1\b/.test(rawCookie) || /\bqrauth=/.test(rawCookie);
+const isPrivateSSR = isPrivate || hasPrivCookie;
+
+const baseLinks: NavLink[] = [
+  { href: '/', label: 'Home' },
+  { href: '/valores', label: 'Valores' },
+  { href: '/industrias', label: 'Industrias' },
+  { href: '/historia', label: 'Historia' },
+  { href: '/contacto', label: 'Contacto' },
+];
+const otherLinks = baseLinks.filter(l => l.href !== '/');
+---
+
+<header
+  id="siteHeader"
+  class={`${transparent ? 'fixed' : 'sticky'} inset-x-0 top-0 z-50 border-b transition-all duration-300
+          ${transparent ? 'bg-transparent text-white border-transparent' : 'bg-white/85 text-slate-800 backdrop-blur-md border-slate-200 shadow-sm'}`}
+>
+  <div class="mx-auto max-w-7xl px-6 h-24 md:h-28 flex items-center justify-between">
+    <a href="/" class="inline-flex items-center gap-4" aria-label="Inbolsa">
+      <img
+        id="siteLogo"
+        src={transparent ? '/logo.png' : '/Black.png'}
+        data-logo-white="/logo.png"
+        data-logo-black="/Black.png"
+        alt="Inbolsa"
+        class="h-20 md:h-20 w-auto transition-opacity duration-300"
+      />
+      <span class="sr-only">Inbolsa</span>
+    </a>
+
+    <nav class="hidden md:flex items-center gap-8 text-base md:text-lg">
+      <!-- Home -->
+      {(() => {
+        const l = { href: '/', label: 'Home' };
+        const active = isActive(l.href);
+        return (
+          <a
+            href={l.href}
+            aria-current={active ? 'page' : undefined}
+            class={`${transparent
+                ? `relative pb-1 hover:opacity-90 ${active ? 'after:absolute after:left-0 after:right-0 after:-bottom-0.5 after:h-0.5 after:bg-white/70' : ''}`
+                : `hover:text-brand-700 ${active ? 'text-brand-700 font-medium' : ''}`
+              }`}
+          >
+            {l.label}
+          </a>
+        );
+      })()}
+
+      <!-- Productos (placeholder fijo) -->
+      <a
+        href="/productos"
+        data-nav-productos
+        style={isPrivateSSR ? '' : 'visibility:hidden; pointer-events:none;'}
+        aria-current={isActive('/productos') ? 'page' : undefined}
+        class={`${transparent
+            ? `relative pb-1 hover:opacity-90 ${isActive('/productos') ? 'after:absolute after:left-0 after:right-0 after:-bottom-0.5 after:h-0.5 after:bg-white/70' : ''}`
+            : `hover:text-brand-700 ${isActive('/productos') ? 'text-brand-700 font-medium' : ''}`
+          }`}
+      >
+        Productos
+      </a>
+
+      <!-- Resto -->
+      {otherLinks.map((l) => {
+        const active = isActive(l.href);
+        return (
+          <a
+            href={l.href}
+            aria-current={active ? 'page' : undefined}
+            class={`${transparent
+                ? `relative pb-1 hover:opacity-90 ${active ? 'after:absolute after:left-0 after:right-0 after:-bottom-0.5 after:h-0.5 after:bg-white/70' : ''}`
+                : `hover:text-brand-700 ${active ? 'text-brand-700 font-medium' : ''}`
+              }`}
+          >
+            {l.label}
+          </a>
+        );
+      })}
+
+      <a
+        id="ctaHeader"
+        href="/contacto"
+        class={`${transparent
+          ? 'rounded-2xl border border-white/70 bg-white/10 hover:bg-white/20 text-white px-5 py-2.5 md:px-6 md:py-3 transition'
+          : 'rounded-2xl bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 md:px-6 md:py-3 transition'
+        }`}
+      >
+        Contáctanos
+      </a>
+    </nav>
+  </div>
+
+  {transparent && (
+    <script is:inline>
+      const header = document.getElementById('siteHeader');
+      const logo   = document.getElementById('siteLogo');
+      const cta    = document.getElementById('ctaHeader');
+
+      const whiteSrc = logo && logo.getAttribute('data-logo-white');
+      const blackSrc = logo && logo.getAttribute('data-logo-black');
+
+      function setSolid(s) {
+        if (!header) return;
+
+        if (s) {
+          header.classList.add('bg-white/85','backdrop-blur-md','text-slate-800','border-slate-200','shadow-sm');
+          header.classList.remove('bg-transparent','text-white','border-transparent');
+          if (logo && blackSrc) logo.setAttribute('src', blackSrc);
+          if (cta) cta.className = 'rounded-2xl bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 md:px-6 md:py-3 transition';
+        } else {
+          header.classList.add('bg-transparent','text-white','border-transparent');
+          header.classList.remove('bg-white/85','backdrop-blur-md','text-slate-800','border-slate-200','shadow-sm');
+          if (logo && whiteSrc) logo.setAttribute('src', whiteSrc);
+          if (cta) cta.className = 'rounded-2xl border border-white/70 bg-white/10 hover:bg-white/20 text-white px-5 py-2.5 md:px-6 md:py-3 transition';
+        }
+      }
+
+      const onScroll = () => setSolid(window.scrollY > 16);
+      onScroll();
+      window.addEventListener('scroll', onScroll, { passive: true });
+    </script>
+  )}
+
+  <!-- Validación & reacción inmediata a revocación/expiración -->
+  <script is:inline>
+    (async function(){
+      const TOKEN_KEY = 'inbolsa_access_token';
+      const link = document.querySelector('[data-nav-productos]');
+
+      function fire(name){ try{ window.dispatchEvent(new CustomEvent(name)); }catch{} }
+
+      function showSoft(){
+        if (link instanceof HTMLElement) {
+          link.style.visibility = '';
+          link.style.pointerEvents = '';
+          link.style.display = ''; // por si antes se ocultó definitivo
+        }
+        fire('inbolsa:private-on');
+      }
+      function hideSoft(){
+        if (link instanceof HTMLElement) {
+          link.style.visibility = 'hidden';
+          link.style.pointerEvents = 'none';
+        }
+      }
+      function hideDefinitive(){
+        if (link instanceof HTMLElement) link.style.display = 'none';
+        // limpiar todo
+        localStorage.removeItem(TOKEN_KEY);
+        document.cookie = 'qrauth=; Max-Age=0; path=/; samesite=Lax';
+        document.cookie = 'priv_mode=; Max-Age=0; path=/; samesite=Lax';
+        fire('inbolsa:private-off');
+        // si estamos en /productos, redirigir a Home
+        if (location.pathname === '/productos') {
+          location.replace('/'); // salida directa
+        }
+      }
+
+      function getCookie(name){
+        return document.cookie.split(';').map(s=>s.trim())
+          .find(s=>s.startsWith(name+'='))?.split('=').slice(1).join('=') || null;
+      }
+
+      if (!link) return;
+
+      let token = localStorage.getItem(TOKEN_KEY);
+
+      // 1) Validar token si existe
+      if (token) {
+        try {
+          const r = await fetch('/api/access/payload?accessToken=' + encodeURIComponent(token), {
+            headers: { 'Authorization': 'Bearer ' + token },
+            credentials: 'include'
+          });
+          const j = await r.json().catch(()=> ({}));
+          if (r.ok && j && j.ok) { showSoft(); return; }
+        } catch {}
+        // token inválido
+        token = null;
+      }
+
+      // 2) Si no hay token pero hay cookie del QR, mostrar y tratar de canjear a token
+      const qrauth = getCookie('qrauth'); // code del QR
+      const priv   = getCookie('priv_mode');
+      if (!token && (qrauth || priv === '1')) {
+        showSoft();
+        if (qrauth) {
+          try {
+            const res = await fetch('/api/qr/validate?code=' + encodeURIComponent(qrauth), { credentials: 'include' });
+            const data = await res.json().catch(()=> ({}));
+            if (res.ok && data && data.valid && data.accessToken) {
+              localStorage.setItem(TOKEN_KEY, data.accessToken);
+              showSoft();
+              return;
+            }
+          } catch {}
+        }
+      }
+
+      // 3) Revocado/expirado → ocultado definitivo
+      hideSoft();
+      hideDefinitive();
+    })();
+
+    // Opcional: si otra pestaña borra el token, reflejar aquí
+    window.addEventListener('storage', (e)=>{
+      if (e.key === 'inbolsa_access_token' && !e.newValue) {
+        const ev = new Event('inbolsa:token-cleared');
+        try { window.dispatchEvent(ev); } catch {}
+      }
+    });
+  </script>
+</header>

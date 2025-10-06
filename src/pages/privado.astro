@@ -1,0 +1,108 @@
+---
+import Base from '../layouts/Base.astro';
+import HeaderPrivado from '../components/HeaderPrivado.astro';
+import Footer from '../components/Footer.astro';
+
+// Lee cookie qrauth en SSR
+const cookie = Astro.request.headers.get('cookie') || '';
+const getCookie = (name: string) =>
+  cookie.split(';').map(s => s.trim()).find(s => s.startsWith(name + '='))?.split('=')[1] || '';
+
+const codeFromCookie = getCookie('qrauth');
+const url = new URL(Astro.request.url);
+const codeFromQuery = url.searchParams.get('qr');
+const code = codeFromQuery || codeFromCookie;
+
+if (!code) {
+  return Astro.redirect('/');
+}
+
+const pageTitle = 'Privado — Inbolsa';
+---
+
+<Base title={pageTitle}>
+  <HeaderPrivado />
+
+  <main>
+
+    <!-- HERO PRIVADO: usa un video distinto al público -->
+    <section id="hero-privado" class="relative h-[80svh] min-h-[520px] w-full overflow-hidden bg-black/90 text-white">
+      <div class="absolute inset-0">
+        <video
+          id="heroVideoPrivado"
+          class="w-full h-full object-cover opacity-80"
+          src="/media/privado/institucional-privado.mp4"
+          autoplay
+          muted
+          loop
+          playsinline
+        ></video>
+      </div>
+      <div class="relative z-10 mx-auto max-w-7xl px-6 h-full flex items-end pb-12">
+        <div>
+          <p class="text-sm/relaxed uppercase tracking-wide text-white/80">Acceso privado</p>
+          <h1 class="mt-2 text-3xl md:text-5xl font-semibold">Catálogo personalizado</h1>
+          <p class="mt-3 max-w-2xl text-base md:text-lg text-white/80">
+            Estás viendo una versión privada de la landing con productos habilitados por tu QR.
+          </p>
+          <a href="#productos" class="inline-flex mt-6 rounded-full bg-white/10 px-4 py-2 text-white ring-1 ring-white/30 hover:bg-white/20">
+            Ver productos
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- PRODUCTOS -->
+    <section id="productos" class="py-14">
+      <div class="mx-auto max-w-7xl px-4">
+        <h2 class="text-2xl font-semibold">Productos seleccionados</h2>
+        <div id="productosGrid" class="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        <p id="productosEmpty" class="mt-3 text-slate-600 hidden">No hay productos asociados a este QR.</p>
+        <p id="productosError" class="mt-3 text-red-600 hidden">No se pudieron cargar los productos.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <Footer />
+
+  <script type="module">
+    (async () => {
+      const grid = document.getElementById('productosGrid');
+      const empty = document.getElementById('productosEmpty');
+      const err  = document.getElementById('productosError');
+
+      function card(p) {
+        const el = document.createElement('article');
+        el.className = 'rounded-2xl border bg-white shadow-sm hover:shadow-md transition overflow-hidden';
+        el.innerHTML = `
+          <div class="aspect-[4/3] bg-slate-100 overflow-hidden">
+            ${p.image ? `<img src="${p.image}" alt="${p.name || ''}" class="w-full h-full object-cover" />` : ''}
+          </div>
+          <div class="p-4">
+            <h3 class="text-lg font-medium">${p.name || 'Producto'}</h3>
+            ${p.sku ? `<p class="text-xs text-slate-500 mt-1">SKU: ${p.sku}</p>` : ''}
+            ${p.description ? `<p class="text-slate-700 mt-2 line-clamp-3">${p.description}</p>` : ''}
+          </div>
+        `;
+        return el;
+      }
+
+      try {
+        const res = await fetch('/api/access/payload', { credentials: 'include', cache: 'no-store' });
+        if (!res.ok) throw new Error('Bad status ' + res.status);
+        const data = await res.json();
+        const items = Array.isArray(data.products) ? data.products : (Array.isArray(data.items) ? data.items : []);
+
+        if (!items.length) { empty?.classList.remove('hidden'); return; }
+
+        const frag = document.createDocumentFragment();
+        items.forEach((p) => frag.appendChild(card(p)));
+        grid?.appendChild(frag);
+      } catch (e) {
+        console.error(e);
+        err?.classList.remove('hidden');
+      }
+    })();
+  </script>
+</Base>
