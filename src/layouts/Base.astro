@@ -1,22 +1,30 @@
 ---
-
-const { title = 'Inbolsa' } = Astro.props;
+const { title = 'Inbolsa · App' } = Astro.props;
 import '../styles/tailwind.css';
-import SiteChat from '../components/SiteChat.astro';
-
 ---
+
 <html lang="es" class="h-full">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
+
+    <!-- Inyecta BASE y API en data-* (no depende de window ni del orden de script) -->
+    <script>
+      (function () {
+        var isSub = location.pathname.startsWith('/inbolsaNeo/');
+        var BASE = isSub ? '/inbolsaNeo' : '';
+        var API  = BASE + '/api';
+        // Guardamos en <html data-base="..." data-api="...">
+        document.documentElement.setAttribute('data-base', BASE);
+        document.documentElement.setAttribute('data-api', API);
+      })();
+    </script>
   </head>
 
   <body class="min-h-dvh bg-slate-50 text-slate-800 antialiased">
     <main class="min-h-dvh">
       <slot />
     </main>
-    <SiteChat />   <!-- Chat en todas las páginas -->
-    
   </body>
 </html>

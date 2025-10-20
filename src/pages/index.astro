@@ -1,5 +1,5 @@
----
-export const prerender = false;
+﻿---
+export const prerender = true;
 
 import Base from '../layouts/Base.astro';
 import Header from '../components/Header.astro';
@@ -93,3 +93,5 @@ const isPrivate = /\bqrauth=/.test(cookie) || /\bpriv_mode=1\b/.test(cookie);
     })();
   </script>
 </Base>
+
+

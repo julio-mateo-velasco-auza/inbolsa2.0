@@ -1,86 +1,64 @@
----
-export const prerender = false;
-
+﻿---
+export const prerender = true;
 import Base from '../../layouts/Base.astro';
-
-// Lee el "next" para redirigir luego de login (por defecto /app/panel)
-const url = new URL(Astro.request.url);
-const next = url.searchParams.get('next') || '/app/panel';
 ---
-<Base title="Iniciar sesión — Inbolsa">
-  <main class="mx-auto max-w-md px-4 py-16">
-    <h1 class="text-3xl font-semibold tracking-tight">Iniciar sesión</h1>
-    <p class="mt-1 text-slate-600">Acceso privado para generar y gestionar QR.</p>
 
-    <form id="loginForm" class="mt-8 space-y-4" onsubmit="return false;">
-      <div>
-        <label class="block text-sm text-slate-700 mb-1">Correo</label>
-        <input id="email" type="email" required
-          class="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:ring-2 focus:ring-brand-300" />
-      </div>
-      <div>
-        <label class="block text-sm text-slate-700 mb-1">Contraseña</label>
-        <input id="password" type="password" required
-          class="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:ring-2 focus:ring-brand-300" />
-      </div>
+<Base title="Inbolsa · App · Login">
+  <section class="min-h-dvh grid place-items-center p-6">
+    <form id="f" class="w-full max-w-md rounded-2xl border bg-white p-6 shadow-sm">
+      <h1 class="text-2xl font-semibold">Iniciar sesión</h1>
+      <p class="text-slate-600 text-sm mt-1">Acceso privado para generar y gestionar QR.</p>
 
-      <button id="btn" class="w-full rounded-xl bg-blue-600 px-5 py-3 font-medium text-white transition hover:bg-blue-700">
+      <label class="mt-6 block text-sm">Correo</label>
+      <input id="email" type="email" required placeholder="admin@inbolsa.com"
+             class="mt-1 w-full rounded-xl border px-4 py-3" />
+
+      <label class="mt-4 block text-sm">Contraseña</label>
+      <input id="password" type="password" required
+             class="mt-1 w-full rounded-xl border px-4 py-3" />
+
+      <button class="mt-6 w-full rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700 transition">
         Entrar
       </button>
 
-      <p id="msg" class="text-sm text-slate-600"></p>
+      <div id="msg" class="mt-3 text-sm text-red-600"></div>
     </form>
-  </main>
+  </section>
 
-  <script is:inline>
-    const form = document.getElementById('loginForm');
+  <script type="module">
+    // Lee los valores inyectados por el layout (SIEMPRE presentes)
+    const html  = document.documentElement;
+    const BASE  = html.getAttribute('data-base') || '';
+    const API   = html.getAttribute('data-api')  || (BASE + '/api');
+    const ORIGIN = location.origin; // http://localhost
+
+    const form = document.getElementById('f');
     const email = document.getElementById('email');
     const password = document.getElementById('password');
-    const btn = document.getElementById('btn');
     const msg = document.getElementById('msg');
-    const nextUrl = new URL(window.location.href).searchParams.get('next') || '/app/panel';
 
-    function show(text, cls='text-slate-600') {
-      msg.className = 'text-sm ' + cls;
-      msg.textContent = text;
-    }
-
-    form?.addEventListener('submit', async () => {
-      show('Validando…');
-      btn.disabled = true;
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      msg.textContent = 'Ingresando…';
 
       try {
-        const res = await fetch('/api/auth/login', {
+        const res = await fetch(ORIGIN + API + '/auth/login', {
           method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'include', // IMPRESCINDIBLE para cookie de sesión
-          body: JSON.stringify({
-            email: email.value.trim(),
-            password: password.value
-          })
+          body: JSON.stringify({ email: email.value, password: password.value })
         });
 
         const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.ok) {
-          show(data.error || 'Credenciales inválidas', 'text-red-700');
-          btn.disabled = false;
+        if (!res.ok || !data?.ok) {
+          msg.textContent = data?.error || 'Credenciales inválidas';
           return;
         }
 
-        // Opcional: ping rápido a /api/auth/me para confirmar cookie
-        const me = await fetch('/api/auth/me', { credentials: 'include' }).then(r => r.json());
-        if (!me || me.auth !== true) {
-          show('No se pudo establecer la sesión. Reintenta.', 'text-red-700');
-          btn.disabled = false;
-          return;
-        }
-
-        // Redirige al panel (o al "next" provisto)
-        window.location.replace(nextUrl);
-      } catch (e) {
-        console.error(e);
-        show('Error de red o servidor.', 'text-red-700');
-        btn.disabled = false;
+        const next = new URLSearchParams(location.search).get('next') || (BASE + '/app/panel');
+        location.replace(next);
+      } catch (err) {
+        msg.textContent = 'No se pudo iniciar sesión.';
       }
     });
   </script>
