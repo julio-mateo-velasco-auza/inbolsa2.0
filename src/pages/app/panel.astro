@@ -1,9 +1,11 @@
 ﻿---
 export const prerender = true;
 import Base from '../../layouts/Base.astro';
+import Boot from '../../components/Boot.astro';
 ---
 
 <Base title="Inbolsa · App · Panel">
+      <Boot />
   <section class="min-h-dvh px-4 py-10">
     <div class="mx-auto max-w-5xl">
       <div class="flex items-center justify-between gap-4">
@@ -95,25 +97,26 @@ import Base from '../../layouts/Base.astro';
   </div>
 
   <script type="module">
-    const BASE = '/inbolsaNeo';
-    // antes: const API = (window as any).__API || '/api';
-    const API = window.__API || '/api';
+    
+    const BASE = (window.__BASE ?? import.meta.env.BASE_URL.replace(/\/$/, ''));
+    const API  = (window.__API  ?? (BASE + '/api'));
 
-
-    async function requireAuth() {
-      try {
-        const r = await fetch(API + '/auth/me', { credentials: 'include' });
-        const d = await r.json().catch(() => ({}));
-        if (!d || d.auth !== true) {
-          location.href = BASE + '/app/login?next=' + encodeURIComponent(BASE + '/app/panel');
-          return false;
-        }
-        return true;
-      } catch {
+  async function requireAuth() {
+    try {
+      const r = await fetch(API + '/auth/me', { credentials: 'include' });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d || d.auth !== true) {
         location.href = BASE + '/app/login?next=' + encodeURIComponent(BASE + '/app/panel');
         return false;
       }
+      return true;
+    } catch {
+      location.href = BASE + '/app/login?next=' + encodeURIComponent(BASE + '/app/panel');
+      return false;
     }
+  }
+
+  await requireAuth();
 
     /* Catálogo, selección y helpers… (idéntico) */
     const CATALOG = [

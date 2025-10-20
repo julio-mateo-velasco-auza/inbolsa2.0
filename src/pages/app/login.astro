@@ -1,65 +1,80 @@
 ﻿---
+/** 👇 TODO lo “export …” va SIEMPRE dentro de este bloque */
 export const prerender = true;
-import Base from '../../layouts/Base.astro';
+
+import Boot from '../../components/Boot.astro';
+
+// Si necesitas el "next" para redirigir:
+const url = new URL(Astro.request.url);
+const next = url.searchParams.get('next') || `${import.meta.env.BASE_URL}app/panel`;
 ---
-
-<Base title="Inbolsa · App · Login">
-  <section class="min-h-dvh grid place-items-center p-6">
-    <form id="f" class="w-full max-w-md rounded-2xl border bg-white p-6 shadow-sm">
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>Iniciar sesión — Inbolsa</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <Boot />
+  </head>
+  <body>
+    <main class="mx-auto max-w-md px-4 py-16">
       <h1 class="text-2xl font-semibold">Iniciar sesión</h1>
-      <p class="text-slate-600 text-sm mt-1">Acceso privado para generar y gestionar QR.</p>
+      <p id="msg" class="mt-2 text-slate-600">Ingresa tus credenciales.</p>
 
-      <label class="mt-6 block text-sm">Correo</label>
-      <input id="email" type="email" required placeholder="admin@inbolsa.com"
-             class="mt-1 w-full rounded-xl border px-4 py-3" />
+      <form id="loginForm" class="mt-6 space-y-4">
+        <div>
+          <label class="block text-sm">Email</label>
+        <input id="email" type="email" required class="w-full border px-3 py-2 rounded" />
+        </div>
+        <div>
+          <label class="block text-sm">Password</label>
+          <input id="password" type="password" required class="w-full border px-3 py-2 rounded" />
+        </div>
+        <button id="btn" type="submit" class="w-full border px-3 py-2 rounded">Entrar</button>
+      </form>
+    </main>
 
-      <label class="mt-4 block text-sm">Contraseña</label>
-      <input id="password" type="password" required
-             class="mt-1 w-full rounded-xl border px-4 py-3" />
+    <script type="module">
+      // BASE/API vienen del boot (same-origin, sin CORS)
+      const BASE = (window.__BASE ?? import.meta.env.BASE_URL.replace(/\/$/, ''));
+      const API  = (window.__API  ?? (BASE + '/api'));
+      const nextUrl = new URLSearchParams(location.search).get('next') || (BASE + '/app/panel');
 
-      <button class="mt-6 w-full rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700 transition">
-        Entrar
-      </button>
+      const $f = document.getElementById('loginForm');
+      const $msg = document.getElementById('msg');
+      const $btn = document.getElementById('btn');
 
-      <div id="msg" class="mt-3 text-sm text-red-600"></div>
-    </form>
-  </section>
+      $f.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        $btn.disabled = true;
+        $msg.textContent = 'Verificando…';
 
-  <script type="module">
-    // Lee los valores inyectados por el layout (SIEMPRE presentes)
-    const html  = document.documentElement;
-    const BASE  = html.getAttribute('data-base') || '';
-    const API   = html.getAttribute('data-api')  || (BASE + '/api');
-    const ORIGIN = location.origin; // http://localhost
+        const email = /** @type {HTMLInputElement} */ (document.getElementById('email')).value.trim();
+        const password = /** @type {HTMLInputElement} */ (document.getElementById('password')).value;
 
-    const form = document.getElementById('f');
-    const email = document.getElementById('email');
-    const password = document.getElementById('password');
-    const msg = document.getElementById('msg');
+        try {
+          const r = await fetch(API + '/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ email, password })
+          });
+          const d = await r.json().catch(() => ({}));
+          if (!r.ok || !d || d.ok !== true) throw new Error(d.error || 'Credenciales inválidas');
 
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      msg.textContent = 'Ingresando…';
-
-      try {
-        const res = await fetch(ORIGIN + API + '/auth/login', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: email.value, password: password.value })
-        });
-
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data?.ok) {
-          msg.textContent = data?.error || 'Credenciales inválidas';
-          return;
+          // Verifica sesión
+          const me = await fetch(API + '/auth/me', { credentials: 'include' });
+          const md = await me.json().catch(() => ({}));
+          if (me.ok && md && md.auth === true) {
+            location.href = nextUrl;
+          } else {
+            throw new Error('No se pudo establecer sesión');
+          }
+        } catch (err) {
+          console.error(err);
+          $msg.textContent = 'Error: ' + (err?.message || 'No se pudo iniciar sesión');
+          $btn.disabled = false;
         }
-
-        const next = new URLSearchParams(location.search).get('next') || (BASE + '/app/panel');
-        location.replace(next);
-      } catch (err) {
-        msg.textContent = 'No se pudo iniciar sesión.';
-      }
-    });
-  </script>
-</Base>
+      });
+    </script>
+  </body>
+</html>

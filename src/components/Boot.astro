@@ -1,0 +1,11 @@
+---
+/**
+ * Inserta <script src="<BASE_URL>app/_boot.js"> sin el error astro(2005).
+ * import.meta.env.BASE_URL termina con "/".
+ */
+const BASE_URL = import.meta.env.BASE_URL;
+const tag = `<script src="${BASE_URL}app/_boot.js"></script>`;
+const baseDataAttr = `<meta name="astro-base" data-astro-base="${BASE_URL}">`;
+---
+<Fragment set:html={baseDataAttr} />
+<Fragment set:html={tag} />
