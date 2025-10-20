@@ -1,0 +1,13 @@
+# No mostrar listados de directorios
+Options -Indexes
+
+# Al entrar a /inbolsaNeo/app/ abrir login.html por defecto
+DirectoryIndex login.html
+
+# Permitir /app/panel en vez de /app/panel.html
+RewriteEngine On
+RewriteBase /inbolsaNeo/app/
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}.html -f
+RewriteRule ^app/?$ app/login.html [L]
